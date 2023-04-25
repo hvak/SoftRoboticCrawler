@@ -84,7 +84,7 @@ class QuadratureEncoder:
         #print(self.position)
 
 class Motor:
-    def __init__(self, in1_pin, in2_pin, pwm_pin, stby_pin, encoder = None):
+    def __init__(self, in1_pin, in2_pin, pwm_pin, stby_pin, encoder = None, polarity = 1):
         self.in1_pin = Pin(in1_pin, Pin.OUT)
         self.in2_pin = Pin(in2_pin, Pin.OUT)
         
@@ -99,6 +99,7 @@ class Motor:
         self.stby_pin.value(1)
         
         self.encoder = encoder
+        self.pol = polarity
             
         #NOT CURRENTLY USING PID
         #self.pid = PID(3.0, 1.0, 0)
@@ -128,6 +129,7 @@ class Motor:
         
     
     def drive(self, duty):
+        duty = duty * self.pol
         if duty > 0:
             self.forward(duty)
         elif duty < 0:
@@ -154,8 +156,8 @@ class Motor:
         
         
         
-enc1 = QuadratureEncoder(4, 5, gear_ratio=75.0, cpr=12.0, polarity=-1)
-motor1 = Motor(1, 2, 3, 0, enc1)
+enc1 = QuadratureEncoder(4, 5, gear_ratio=75.0, cpr=12.0, polarity=1)
+motor1 = Motor(1, 2, 3, 0, enc1, polarity = -1)
 
 enc2 = QuadratureEncoder(9, 10, gear_ratio=75.0, cpr=12.0, polarity=1)
 motor2 = Motor(6, 7, 8, 0, enc2)
@@ -165,7 +167,6 @@ motor3 = Motor(11, 12, 13, 0, enc3)
 
 cMotor1 = Motor(16, 17, 18, 22)
 cMotor2 = Motor(19, 20, 21, 22)
-
 
 
 """
@@ -237,8 +238,8 @@ while True:
         motor3.brake()
         cMotor1.brake()
         cMotor2.brake()
-
 """
+
 
 """
 WIGGLES STATE MACHINE
@@ -269,14 +270,16 @@ while True:
 
 cycle = [0, 3, 4, 2, 1, 5]
 i = 0
-close_setpoint = 1.6
+close_setpoint = 1.4
 open_setpoint = 0
 close_time = 1.8 * 1000
 open_time = 1 * 1000
 
 cycle_count = 0
 
-div = 32
+div = 16.0
+move_unit = (close_setpoint-open_setpoint)/div
+
 while True:     
     state = cycle[i]
     print("STATE = " , state)
@@ -319,21 +322,40 @@ while True:
             if ret1 and ret2 and ret3:
                 break
         """
+        
+        
         for j in range(div):
-            setpoint = (j+1) * (close_setpoint / float(div))                    
+            t = utime.ticks_ms()    
+                                           
+            a = motor1.encoder.position+move_unit
+            b = motor2.encoder.position+move_unit
+            c = motor3.encoder.position+move_unit
             
-            while True:
-                ret1 = motor1.drive_to_setpoint(-setpoint)
-                if ret1:
-                    break
-            while True:
-                ret2 = motor2.drive_to_setpoint(setpoint)
-                if ret2:
-                    break
-            while True:
-                ret3 = motor3.drive_to_setpoint(setpoint)
-                if ret3:
-                    break
+            print("Position goals")
+            print(a)
+            print(b)
+            print(c)
+            
+            if (motor1.encoder.position < close_setpoint):
+                while True and utime.ticks_diff(utime.ticks_ms(), t) < 2000:                                
+                    ret1 = motor1.drive_to_setpoint(a)
+                    if ret1:
+                        
+                        break
+            t = utime.ticks_ms()            
+            if (motor2.encoder.position < close_setpoint):
+                while True and utime.ticks_diff(utime.ticks_ms(), t) < 2000:
+                    
+                    ret2 = motor2.drive_to_setpoint(b)
+                    if ret2:
+                        break
+            t = utime.ticks_ms()    
+            if (motor3.encoder.position < close_setpoint):
+                while True and utime.ticks_diff(utime.ticks_ms(), t) < 2000:
+                    ret3 = motor3.drive_to_setpoint(c)
+                    if ret3:
+                        break
+            #utime.sleep_ms(1000)
         
             
     elif state == 5:
@@ -348,20 +370,34 @@ while True:
         """
         
         for j in range(div):
-            setpoint = (div-j-1) * (close_setpoint / float(div))
+            t = utime.ticks_ms()    
+            a = motor1.encoder.position-move_unit
+            b = motor2.encoder.position-move_unit
+            c = motor3.encoder.position-move_unit
+            print("Position goals")
+            print(a)
+            print(b)
+            print(c)
             
-            while True:
-                ret1 = motor1.drive_to_setpoint(-setpoint)
-                if ret1:
-                    break
-            while True:
-                ret2 = motor2.drive_to_setpoint(setpoint)
-                if ret2:
-                    break
-            while True:
-                ret3 = motor3.drive_to_setpoint(setpoint)
-                if ret3:
-                    break
+            if (motor1.encoder.position > open_setpoint):
+                while True and utime.ticks_diff(utime.ticks_ms(), t) < 2000:
+                    ret1 = motor1.drive_to_setpoint(a)
+                    if ret1:
+                        break
+            t = utime.ticks_ms()    
+            if (motor2.encoder.position > open_setpoint):
+                while True and utime.ticks_diff(utime.ticks_ms(), t) < 2000:
+                    ret2 = motor2.drive_to_setpoint(b)
+                    if ret2:
+                        break
+            t = utime.ticks_ms()                        
+            if (motor3.encoder.position > open_setpoint):
+                while True and utime.ticks_diff(utime.ticks_ms(), t) < 2000:
+                    ret3 = motor3.drive_to_setpoint(c)
+                    if ret3:
+                        break
+            
+            #utime.sleep_ms(1000)
                 
     else:
         motor1.brake()
