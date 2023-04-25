@@ -83,45 +83,6 @@ class QuadratureEncoder:
         self.position = self.count / (self.cpr * self.gear_ratio)
         #print(self.position)
 
-class PID:
-    def __init__(self, Kp, Ki, Kd):
-        self.Kp = Kp
-        self.Ki = Ki
-        self.Kd = Kd
-        
-        self.proportional = 0.0
-        self.integral = 0.0
-        self.derivative = 0.0
-        self.prev_error = 0
-        
-        self.prev_time = 0
-        
-        
-    
-    def update(self, current_pos, desired_pos):
-        
-        t = utime.ticks_ms()
-        if (t == self.prev_time):
-            return       
-        dt = utime.ticks_diff(t, self.prev_time) / 1000.0
-        self.prev_time = t
-        
-        error = desired_pos - current_pos
-        
-        print(current_pos, desired_pos, error)
-        
-        self.proportional = self.Kp * error
-        self.integral += float(self. Ki * error * dt)
-        self.derivative = float((self.Kd * (error - self.prev_error)) / dt)
-        self.prev_error = error
-        
-        
-        command = self.proportional + self.integral + self.derivative
-        return command
-    
-    def reset():
-        pass
-
 class Motor:
     def __init__(self, in1_pin, in2_pin, pwm_pin, stby_pin, encoder = None):
         self.in1_pin = Pin(in1_pin, Pin.OUT)
@@ -143,17 +104,15 @@ class Motor:
         #self.pid = PID(3.0, 1.0, 0)
         
         self.max_duty = 90
+        
+        self.prev_diff = 0
     
-    def drive_to_setpoint(self, setpoint, thresh=0.1, duty_magnitude=40):
-        """
-        pwm = self.pid.update(self.encoder.position, setpoint)
-        if pwm != None:
-            self.drive(pwm)
-        """
+    def drive_to_setpoint(self, setpoint, thresh=0.1, duty_magnitude=80):
         diff = self.encoder.position - setpoint
-        print(self.encoder.position, diff)
-        if abs(diff) <= thresh:
+        
+        if diff * self.prev_diff < 0 or diff == 0: #abs(diff) <= thresh:
             self.brake()
+            self.prev_diff = 0
             return True
         else:
             if self.encoder.position < setpoint:
@@ -162,6 +121,8 @@ class Motor:
             else:
                 #reverse
                 self.drive(-duty_magnitude)
+                
+        self.prev_diff = diff
         return False
             
         
@@ -207,31 +168,42 @@ cMotor2 = Motor(19, 20, 21, 22)
 
 
 
+"""
 motor1.encoder.position = 0.0
 motor2.encoder.position = 0.0
 motor3.encoder.position = 0.0
-
-
 #TODO - tune effective length, better polarity
-
 setpoint = 0
 while True:
     i = input()
-    if i == 'w':
+    if i == 'q':
+        motor1.brake()
+        motor2.brake()
+        motor3.brake()
+        cMotor1.brake()
+        cMotor2.brake()
+        motor1.encoder.position = 0.0
+        motor2.encoder.position = 0.0
+        motor3.encoder.position = 0.0
+    elif i == 'w':
         setpoint += 1
         while True:
-            ret1 = motor1.drive_to_setpoint(-setpoint, thresh=0.05)
+            ret1 = motor1.drive_to_setpoint(-setpoint)
             ret2 = motor2.drive_to_setpoint(setpoint, thresh=0.05)
             ret3 = motor3.drive_to_setpoint(setpoint, thresh=0.05)
+            
+            print(motor1.encoder.position, motor2.encoder.position, motor3.encoder.position)
     
             if ret1 and ret2 and ret3:
                 break
     elif i == 's':
         setpoint -= 1
         while True:
-            ret1 = motor1.drive_to_setpoint(-setpoint, thresh=0.05)
-            ret2 = motor2.drive_to_setpoint(setpoint, thresh=0.05)
-            ret3 = motor3.drive_to_setpoint(setpoint, thresh=0.05)
+            ret1 = motor1.drive_to_setpoint(-setpoint, duty_magnitude=20)
+            ret2 = motor2.drive_to_setpoint(setpoint, duty_magnitude=20)
+            ret3 = motor3.drive_to_setpoint(setpoint, duty_magnitude=20)
+            
+            print(motor1.encoder.position, motor2.encoder.position, motor3.encoder.position)
     
             if ret1 and ret2 and ret3:
                 break
@@ -239,9 +211,177 @@ while True:
         motor1.encoder.position = 0.0
         motor2.encoder.position = 0.0
         motor3.encoder.position = 0.0
+    elif i == '1f':
+        motor1.drive(-30)
+    elif i == '1r':
+        motor1.drive(30)
+    elif i == '2f':
+        motor2.drive(30)
+    elif i == '2r':
+        motor2.drive(-30)
+    elif i == '3f':
+        motor3.drive(30)
+    elif i == '3r':
+        motor3.drive(-30)
+    elif i == 'nf':
+        cMotor1.drive(50)
+    elif i == 'nr':
+        cMotor1.drive(-50)
+    elif i =='rf':
+        cMotor2.drive(50)
+    elif i == 'rr':
+        cMotor2.drive(-50)
     else:
         motor1.brake()
         motor2.brake()
         motor3.brake()
+        cMotor1.brake()
+        cMotor2.brake()
+
+"""
+
+"""
+WIGGLES STATE MACHINE
+States
+
+0 - close nose
+1 - open nose
+2 - close rear
+3 - open rear
+4 - contract body
+5 - open body
+"""
+
+motor1.brake()
+motor2.brake()
+motor3.brake()
+cMotor1.brake()
+cMotor2.brake()
+motor1.encoder.position = 0.0
+motor2.encoder.position = 0.0
+motor3.encoder.position = 0.0
+
+while True:
+    i = input()
+    if i == 'w':
+        break
+    
+
+cycle = [0, 3, 4, 2, 1, 5]
+i = 0
+close_setpoint = 1.6
+open_setpoint = 0
+close_time = 1.8 * 1000
+open_time = 1 * 1000
+
+cycle_count = 0
+
+div = 32
+while True:     
+    state = cycle[i]
+    print("STATE = " , state)
+    if state == 0:
+        # close nose
+        t = utime.ticks_ms()
+        while utime.ticks_ms() < t + close_time:
+            #print(str(utime.ticks_ms()), str(t+close_time))
+            cMotor1.drive(50)
+        cMotor1.brake()
+        
+    elif state == 1:
+        # open nose
+        t = utime.ticks_ms()
+        while utime.ticks_ms() < t + open_time:
+            cMotor1.drive(-50)
+        cMotor1.brake()
+        
+    elif state == 2:
+        # close rear
+        t = utime.ticks_ms()
+        while utime.ticks_ms() < t + close_time:
+            cMotor2.drive(50)
+        cMotor2.brake()
+        
+    elif state == 3:
+        # open rear
+        t = utime.ticks_ms()
+        while utime.ticks_ms() < t + open_time:
+            cMotor2.drive(-50)
+        cMotor2.brake()
+        
+    elif state == 4:
+        #close body
+        """
+        while True:
+            ret1 = motor1.drive_to_setpoint(-close_setpoint)
+            ret2 = motor2.drive_to_setpoint(close_setpoint)
+            ret3 = motor3.drive_to_setpoint(close_setpoint)
+            if ret1 and ret2 and ret3:
+                break
+        """
+        for j in range(div):
+            setpoint = (j+1) * (close_setpoint / float(div))                    
+            
+            while True:
+                ret1 = motor1.drive_to_setpoint(-setpoint)
+                if ret1:
+                    break
+            while True:
+                ret2 = motor2.drive_to_setpoint(setpoint)
+                if ret2:
+                    break
+            while True:
+                ret3 = motor3.drive_to_setpoint(setpoint)
+                if ret3:
+                    break
+        
+            
+    elif state == 5:
+        #open_body
+        """
+        while True:
+            ret1 = motor1.drive_to_setpoint(-open_setpoint, duty_magnitude=20)
+            ret2 = motor2.drive_to_setpoint(open_setpoint, duty_magnitude=20)
+            ret3 = motor3.drive_to_setpoint(open_setpoint, duty_magnitude=20)
+            if ret1 and ret2 and ret3:
+                break
+        """
+        
+        for j in range(div):
+            setpoint = (div-j-1) * (close_setpoint / float(div))
+            
+            while True:
+                ret1 = motor1.drive_to_setpoint(-setpoint)
+                if ret1:
+                    break
+            while True:
+                ret2 = motor2.drive_to_setpoint(setpoint)
+                if ret2:
+                    break
+            while True:
+                ret3 = motor3.drive_to_setpoint(setpoint)
+                if ret3:
+                    break
+                
+    else:
+        motor1.brake()
+        motor2.brake()
+        motor3.brake()
+        cMotor1.brake()
+        cMotor2.brake()
+    
+    i += 1
+    
+    if i == 1 and cycle_count == 0:
+        #skip rear open on first cycle
+        i += 1
+    
+    if i > 5:
+        print("RESETTING")
+        cycle_count += 1
+        i = 0
 
 
+
+        
+        
