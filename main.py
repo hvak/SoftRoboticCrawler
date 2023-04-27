@@ -170,6 +170,9 @@ cMotor2 = Motor(19, 20, 21, 22)
 
 
 """
+
+# INDIVIDUAL MOTOR CONTROL
+
 motor1.encoder.position = 0.0
 motor2.encoder.position = 0.0
 motor3.encoder.position = 0.0
@@ -186,36 +189,14 @@ while True:
         motor1.encoder.position = 0.0
         motor2.encoder.position = 0.0
         motor3.encoder.position = 0.0
-    elif i == 'w':
-        setpoint += 1
-        while True:
-            ret1 = motor1.drive_to_setpoint(-setpoint)
-            ret2 = motor2.drive_to_setpoint(setpoint, thresh=0.05)
-            ret3 = motor3.drive_to_setpoint(setpoint, thresh=0.05)
-            
-            print(motor1.encoder.position, motor2.encoder.position, motor3.encoder.position)
-    
-            if ret1 and ret2 and ret3:
-                break
-    elif i == 's':
-        setpoint -= 1
-        while True:
-            ret1 = motor1.drive_to_setpoint(-setpoint, duty_magnitude=20)
-            ret2 = motor2.drive_to_setpoint(setpoint, duty_magnitude=20)
-            ret3 = motor3.drive_to_setpoint(setpoint, duty_magnitude=20)
-            
-            print(motor1.encoder.position, motor2.encoder.position, motor3.encoder.position)
-    
-            if ret1 and ret2 and ret3:
-                break
     elif i == 'r':
         motor1.encoder.position = 0.0
         motor2.encoder.position = 0.0
         motor3.encoder.position = 0.0
     elif i == '1f':
-        motor1.drive(-30)
-    elif i == '1r':
         motor1.drive(30)
+    elif i == '1r':
+        motor1.drive(-30)
     elif i == '2f':
         motor2.drive(30)
     elif i == '2r':
@@ -238,8 +219,8 @@ while True:
         motor3.brake()
         cMotor1.brake()
         cMotor2.brake()
-"""
 
+"""
 
 """
 WIGGLES STATE MACHINE
@@ -261,11 +242,6 @@ cMotor2.brake()
 motor1.encoder.position = 0.0
 motor2.encoder.position = 0.0
 motor3.encoder.position = 0.0
-
-while True:
-    i = input()
-    if i == 'w':
-        break
     
 
 cycle = [0, 3, 4, 2, 1, 5]
@@ -273,12 +249,111 @@ i = 0
 close_setpoint = 1.4
 open_setpoint = 0
 close_time = 1.8 * 1000
-open_time = 1 * 1000
+open_time = 1.2 * 1000
 
 cycle_count = 0
 
-div = 16.0
+div = 32.0
 move_unit = (close_setpoint-open_setpoint)/div
+
+#PRESS W TO CONTINUE TO AUTONOMOUS
+while True:
+    a = input()
+    if a == 'w':
+        motor1.brake()
+        motor2.brake()
+        motor3.brake()
+        cMotor1.brake()
+        cMotor2.brake()
+        motor1.encoder.position = 0.0
+        motor2.encoder.position = 0.0
+        motor3.encoder.position = 0.0
+        break
+    elif a == 'nc':
+        # close nose
+        t = utime.ticks_ms()
+        while utime.ticks_ms() < t + close_time:
+            #print(str(utime.ticks_ms()), str(t+close_time))
+            cMotor1.drive(50)
+        cMotor1.brake()
+    elif a == 'no':
+        # open nose
+        t = utime.ticks_ms()
+        while utime.ticks_ms() < t + open_time:
+            cMotor1.drive(-50)
+        cMotor1.brake()
+    elif a == 'rc':
+        # close rear
+        t = utime.ticks_ms()
+        while utime.ticks_ms() < t + close_time:
+            cMotor2.drive(50)
+        cMotor2.brake()
+    elif a == 'ro':
+        # open rear
+        t = utime.ticks_ms()
+        while utime.ticks_ms() < t + open_time:
+            cMotor2.drive(-50)
+        cMotor2.brake()
+    elif a == 'bc':
+        for j in range(div):
+            t = utime.ticks_ms()    
+                                           
+            a = motor1.encoder.position+move_unit
+            b = motor2.encoder.position+move_unit
+            c = motor3.encoder.position+move_unit
+            
+            if (motor1.encoder.position < close_setpoint):
+                while True and utime.ticks_diff(utime.ticks_ms(), t) < 300:                                
+                    ret1 = motor1.drive_to_setpoint(a)
+                    if ret1:
+                        
+                        break
+            t = utime.ticks_ms()            
+            if (motor2.encoder.position < close_setpoint):
+                while True and utime.ticks_diff(utime.ticks_ms(), t) < 300:
+                    
+                    ret2 = motor2.drive_to_setpoint(b)
+                    if ret2:
+                        break
+            t = utime.ticks_ms()    
+            if (motor3.encoder.position < close_setpoint):
+                while True and utime.ticks_diff(utime.ticks_ms(), t) < 300:
+                    ret3 = motor3.drive_to_setpoint(c)
+                    if ret3:
+                        break
+    elif a == 'bo':
+        for j in range(div):
+            t = utime.ticks_ms()    
+            a = motor1.encoder.position-move_unit
+            b = motor2.encoder.position-move_unit
+            c = motor3.encoder.position-move_unit
+            
+            if (motor1.encoder.position > open_setpoint):
+                while True and utime.ticks_diff(utime.ticks_ms(), t) < 300:
+                    ret1 = motor1.drive_to_setpoint(a)
+                    if ret1:
+                        break
+            t = utime.ticks_ms()    
+            if (motor2.encoder.position > open_setpoint):
+                while True and utime.ticks_diff(utime.ticks_ms(), t) < 300:
+                    ret2 = motor2.drive_to_setpoint(b)
+                    if ret2:
+                        break
+            t = utime.ticks_ms()                        
+            if (motor3.encoder.position > open_setpoint):
+                while True and utime.ticks_diff(utime.ticks_ms(), t) < 300:
+                    ret3 = motor3.drive_to_setpoint(c)
+                    if ret3:
+                        break
+    else:
+        motor1.brake()
+        motor2.brake()
+        motor3.brake()
+        cMotor1.brake()
+        cMotor2.brake()
+        motor1.encoder.position = 0.0
+        motor2.encoder.position = 0.0
+        motor3.encoder.position = 0.0
 
 while True:     
     state = cycle[i]
@@ -337,21 +412,21 @@ while True:
             print(c)
             
             if (motor1.encoder.position < close_setpoint):
-                while True and utime.ticks_diff(utime.ticks_ms(), t) < 2000:                                
+                while True and utime.ticks_diff(utime.ticks_ms(), t) < 300:                                
                     ret1 = motor1.drive_to_setpoint(a)
                     if ret1:
                         
                         break
             t = utime.ticks_ms()            
             if (motor2.encoder.position < close_setpoint):
-                while True and utime.ticks_diff(utime.ticks_ms(), t) < 2000:
+                while True and utime.ticks_diff(utime.ticks_ms(), t) < 300:
                     
                     ret2 = motor2.drive_to_setpoint(b)
                     if ret2:
                         break
             t = utime.ticks_ms()    
             if (motor3.encoder.position < close_setpoint):
-                while True and utime.ticks_diff(utime.ticks_ms(), t) < 2000:
+                while True and utime.ticks_diff(utime.ticks_ms(), t) < 300:
                     ret3 = motor3.drive_to_setpoint(c)
                     if ret3:
                         break
@@ -380,19 +455,19 @@ while True:
             print(c)
             
             if (motor1.encoder.position > open_setpoint):
-                while True and utime.ticks_diff(utime.ticks_ms(), t) < 2000:
+                while True and utime.ticks_diff(utime.ticks_ms(), t) < 300:
                     ret1 = motor1.drive_to_setpoint(a)
                     if ret1:
                         break
             t = utime.ticks_ms()    
             if (motor2.encoder.position > open_setpoint):
-                while True and utime.ticks_diff(utime.ticks_ms(), t) < 2000:
+                while True and utime.ticks_diff(utime.ticks_ms(), t) < 300:
                     ret2 = motor2.drive_to_setpoint(b)
                     if ret2:
                         break
             t = utime.ticks_ms()                        
             if (motor3.encoder.position > open_setpoint):
-                while True and utime.ticks_diff(utime.ticks_ms(), t) < 2000:
+                while True and utime.ticks_diff(utime.ticks_ms(), t) < 300:
                     ret3 = motor3.drive_to_setpoint(c)
                     if ret3:
                         break
